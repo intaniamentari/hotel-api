@@ -32,19 +32,40 @@ if (count($request) > 0 && $request[0] == 'rooms') {
         case 'GET':
             if (isset($request[1])) {
                 // GET /rooms/{id} -> Dapatkan detail kamar berdasarkan ID
-                $room_id = $request[1];
-                // Logika untuk mendapatkan kamar berdasarkan ID dari database atau data statis
-                response(200, "Room details fetched", ["id" => $room_id, "name" => "Room $room_id", "status" => "available"]);
+                $room_id = (int) $request[1]; // Pastikan ID adalah integer
+        
+                try {
+                    // Siapkan pernyataan untuk mengambil detail kamar berdasarkan ID
+                    $stmt = $pdo->prepare("SELECT * FROM rooms WHERE id = :id");
+                    $stmt->execute(['id' => $room_id]);
+                    $room = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+                    if ($room) {
+                        // Jika kamar ditemukan, kembalikan detail kamar
+                        response(200, "Get data room successful", $room);
+                    } else {
+                        // Jika tidak ada kamar ditemukan dengan ID tersebut
+                        response(404, "Room not found");
+                    }
+                } catch (PDOException $e) {
+                    // Tangani kesalahan jika gagal mendapatkan data dari database
+                    return validationError(500, ["Database error: " . $e->getMessage()]);
+                }
             } else {
                 // GET /rooms -> Dapatkan semua kamar
-                // Logika untuk mendapatkan semua kamar dari database atau data statis
-                $rooms = [
-                    ["id" => 1, "name" => "Room 1", "status" => "available"],
-                    ["id" => 2, "name" => "Room 2", "status" => "occupied"]
-                ];
-                response(200, "Rooms fetched", $rooms);
+                try {
+                    // Siapkan pernyataan untuk mengambil semua kamar
+                    $stmt = $pdo->query("SELECT * FROM rooms");
+                    $rooms = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+                    response(200, "Get all data rooms", $rooms);
+                } catch (PDOException $e) {
+                    // Tangani kesalahan jika gagal mendapatkan data dari database
+                    return validationError(500, ["Database error: " . $e->getMessage()]);
+                }
             }
             break;
+        
 
         case 'POST':
             // POST /rooms -> Menambahkan kamar baru
