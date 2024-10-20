@@ -44,12 +44,12 @@ function _inputDataType($data, $update = false, $id)
     if(!is_string($data['room_number'])){
         $error_list['room_number'] = 'Data must be string format';
     } else {
-        // Cek apakah room_number sudah ada di database (update data)
+        // check room_number in method update
+        $room_number = $data['room_number'];
         if($update) {
-            $data_id = $id; // ID kamar yang sedang di-update
-            $room_number = $data['room_number'];
+            $data_id = $id;           
 
-            // Query untuk memeriksa apakah room_number sudah ada, kecuali untuk kamar dengan $data_id
+            // Query check duplicate room_number except data itself
             $stmt = $pdo->prepare("SELECT COUNT(*) FROM rooms WHERE room_number = :room_number AND id != :id");
             $stmt->execute(['room_number' => $room_number, 'id' => $data_id]);
             $count = $stmt->fetchColumn();
@@ -57,8 +57,9 @@ function _inputDataType($data, $update = false, $id)
             if ($count > 0) {
                 $error_list['room_number'] = 'Room number must be unique';
             }
+        
+        // check data room_number in method create
         } else {
-            $room_number = $data['room_number'];
             $stmt = $pdo->prepare("SELECT COUNT(*) FROM rooms WHERE room_number = :room_number");
             $stmt->execute(['room_number' => $room_number]);
             $count = $stmt->fetchColumn();
