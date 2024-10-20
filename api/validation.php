@@ -2,7 +2,7 @@
 
 include 'db.php';
 
-function ValidationStoreRoom($data)
+function ValidationRoom($data, $update = false, $id = null)
 {
     if (_notEmpty($data)) {
         $validation_error = [
@@ -12,7 +12,7 @@ function ValidationStoreRoom($data)
         return $validation_error;
     }
 
-    $validation_type = _inputDataType($data);
+    $validation_type = _inputDataType($data, $update, $id);
     if($validation_type !== []) {
         return $validation_type;
     }
@@ -20,17 +20,12 @@ function ValidationStoreRoom($data)
     return;
 }
 
-function ValidationUpdateRoom($data)
-{
-
-}
-
 function _notEmpty($data)
 {
     if(
-        !isset($data['room_number']) && empty($data['room_number']) &&
-        !isset($data['room_type']) && empty($data['room_type']) &&
-        !isset($data['price_per_night']) && empty($data['price_per_night']) &&
+        !isset($data['room_number']) && empty($data['room_number']) ||
+        !isset($data['room_type']) && empty($data['room_type']) ||
+        !isset($data['price_per_night']) && empty($data['price_per_night']) ||
         !isset($data['availability']) && empty($data['availability'])
     ) {
         return [
@@ -41,7 +36,7 @@ function _notEmpty($data)
     return;
 }
 
-function _inputDataType($data)
+function _inputDataType($data, $update = false, $id)
 {
     global $pdo;
     $error_list = [];
@@ -49,14 +44,28 @@ function _inputDataType($data)
     if(!is_string($data['room_number'])){
         $error_list['room_number'] = 'Data must be string format';
     } else {
-        // Cek apakah room_number sudah ada di database
-        $room_number = $data['room_number'];
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM rooms WHERE room_number = :room_number");
-        $stmt->execute(['room_number' => $room_number]);
-        $count = $stmt->fetchColumn();
+        // Cek apakah room_number sudah ada di database (update data)
+        if($update) {
+            $data_id = $id; // ID kamar yang sedang di-update
+            $room_number = $data['room_number'];
 
-        if ($count > 0) {
-            $error_list['room_number'] = 'Room number must be unique';
+            // Query untuk memeriksa apakah room_number sudah ada, kecuali untuk kamar dengan $data_id
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM rooms WHERE room_number = :room_number AND id != :id");
+            $stmt->execute(['room_number' => $room_number, 'id' => $data_id]);
+            $count = $stmt->fetchColumn();
+
+            if ($count > 0) {
+                $error_list['room_number'] = 'Room number must be unique';
+            }
+        } else {
+            $room_number = $data['room_number'];
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM rooms WHERE room_number = :room_number");
+            $stmt->execute(['room_number' => $room_number]);
+            $count = $stmt->fetchColumn();
+    
+            if ($count > 0) {
+                $error_list['room_number'] = 'Room number must be unique';
+            }
         }
     }
 

@@ -19,10 +19,17 @@ function response($status, $message, $data = []) {
     ]);
 }
 
-function validationError($status, $error = []) {
+function responseError($status, $error = []) {
     echo json_encode([
         "status" => $status,
         "error" => $error
+    ]);
+}
+
+function simpleResponse($status, $message) {
+    echo json_encode([
+        "status" => $status,
+        "message" => $message
     ]);
 }
 
@@ -36,7 +43,7 @@ if (count($request) > 0 && $request[0] == 'rooms') {
         
                 try {
                     // Siapkan pernyataan untuk mengambil detail kamar berdasarkan ID
-                    $stmt = $pdo->prepare("SELECT * FROM rooms WHERE id = :id");
+                    $stmt = $pdo->prepare("SELECT * FROM rooms WHERE id = :id AND deleted_at  IS NULL");
                     $stmt->execute(['id' => $room_id]);
                     $room = $stmt->fetch(PDO::FETCH_ASSOC);
         
@@ -45,23 +52,23 @@ if (count($request) > 0 && $request[0] == 'rooms') {
                         response(200, "Get data room successful", $room);
                     } else {
                         // Jika tidak ada kamar ditemukan dengan ID tersebut
-                        response(404, "Room not found");
+                        responseError(404, "Room not found");
                     }
                 } catch (PDOException $e) {
                     // Tangani kesalahan jika gagal mendapatkan data dari database
-                    return validationError(500, ["Database error: " . $e->getMessage()]);
+                    return responseError(500, ["Database error: " . $e->getMessage()]);
                 }
             } else {
                 // GET /rooms -> Dapatkan semua kamar
                 try {
                     // Siapkan pernyataan untuk mengambil semua kamar
-                    $stmt = $pdo->query("SELECT * FROM rooms");
+                    $stmt = $pdo->query("SELECT * FROM rooms WHERE deleted_at IS NULL");
                     $rooms = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
                     response(200, "Get all data rooms", $rooms);
                 } catch (PDOException $e) {
                     // Tangani kesalahan jika gagal mendapatkan data dari database
-                    return validationError(500, ["Database error: " . $e->getMessage()]);
+                    return responseError(500, ["Database error: " . $e->getMessage()]);
                 }
             }
             break;
@@ -70,10 +77,10 @@ if (count($request) > 0 && $request[0] == 'rooms') {
         case 'POST':
             // POST /rooms -> Menambahkan kamar baru
             $input = json_decode(file_get_contents("php://input"), true);
-            $validation_error = ValidationStoreRoom($input);
+            $validation_error = ValidationRoom($input);
 
             if($validation_error) {
-                return validationError(400, $validation_error);
+                return responseError(400, $validation_error);
             }
 
             // Logika untuk menambahkan kamar ke database
@@ -88,7 +95,7 @@ if (count($request) > 0 && $request[0] == 'rooms') {
                     'room_number' => $input['room_number'],
                     'room_type' => $input['room_type'],
                     'price_per_night' => $input['price_per_night'],
-                    'availability' => $input['availability'],
+                    'availability' => $input['availability'] === true ? 1 : 0,
                     'created_at' => $current_timestamp,
                     'updated_at' => $current_timestamp
                 ]);
@@ -97,25 +104,77 @@ if (count($request) > 0 && $request[0] == 'rooms') {
                 response(201, "Room successfully added", $input);
             } catch (PDOException $e) {
                 // Tangani kesalahan jika gagal menambahkan ke database
-                return validationError(500, ["Database error: " . $e->getMessage()]);
+                return responseError(500, ["Database error: " . $e->getMessage()]);
             }
             break;
 
         case 'PUT':
-            // PUT /rooms -> Memperbarui kamar
+            // PUT /rooms/{id} -> Memperbarui kamar
             $input = json_decode(file_get_contents("php://input"), true);
-            // Logika untuk memperbarui kamar di database
-            response(200, "Room updated", $input);
-            break;
+        
+            // Mendapatkan ID kamar dari URL
+            $room_id = (int) $request[1]; // Asumsikan ID kamar ada di $request[1]
+        
+            // Validasi input
+            $validation_error = ValidationRoom($input, true, $room_id);
+        
+            if ($validation_error) {
+                return responseError(400, $validation_error);
+            }
+        
+            try {
+                // Siapkan pernyataan untuk memperbarui data kamar
+                $stmt = $pdo->prepare("UPDATE rooms SET 
+                    room_number = :room_number,
+                    room_type = :room_type,
+                    price_per_night = :price_per_night,
+                    availability = :availability,
+                    updated_at = NOW() 
+                    WHERE id = :id AND deleted_at IS NULL");
+        
+                // Eksekusi pernyataan dengan data input
+                $stmt->execute([
+                    'room_number' => $input['room_number'],
+                    'room_type' => $input['room_type'],
+                    'price_per_night' => $input['price_per_night'],
+                    'availability' => $input['availability'] === true ? '1' : '0', // Ubah boolean menjadi string
+                    'id' => $room_id // ID kamar yang ingin diperbarui
+                ]);
+
+                $getDataUpdated = $pdo->prepare("SELECT * FROM rooms WHERE id = :id");
+                $getDataUpdated->execute(['id' => $room_id]);
+                $roomDataUpdated = $getDataUpdated->fetch(PDO::FETCH_ASSOC);
+        
+                response(200, "Room updated", $roomDataUpdated);
+            } catch (PDOException $e) {
+                return responseError(500, ["Database error: " . $e->getMessage()]);
+            }
+            break;            
 
         case 'DELETE':
+            // DELETE /rooms/{id} -> Menghapus kamar berdasarkan ID
             if (isset($request[1])) {
-                // DELETE /rooms/{id} -> Menghapus kamar berdasarkan ID
-                $room_id = $request[1];
-                // Logika untuk menghapus kamar dari database
-                response(200, "Room deleted", ["id" => $room_id]);
+                $room_id = (int) $request[1]; // Ambil ID dari URL
+                
+                try {
+                    $stmt = $pdo->prepare("UPDATE rooms SET 
+                        deleted_at = NOW() 
+                        WHERE id = :id");
+
+                    $stmt->execute(['id' => $room_id]);
+                    
+                    // Cek apakah ada baris yang terpengaruh (dihapus)
+                    if ($stmt->rowCount() > 0) {
+                        simpleResponse(200, "Room deleted successfully");
+                    } else {
+                        // Jika tidak ada baris yang dihapus (misalnya ID tidak ditemukan)
+                        responseError(404, "Room not found");
+                    }
+                } catch (PDOException $e) {
+                    return responseError(500, ["Database error: " . $e->getMessage()]);
+                }
             } else {
-                response(400, "Room ID not provided");
+                responseError(400, "Room ID is required");
             }
             break;
 
