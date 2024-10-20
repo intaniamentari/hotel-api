@@ -1,7 +1,7 @@
 <?php
 // db.php
 $host = 'localhost';
-$dbname = 'api_database';
+$dbname = 'hotel_db';
 $username = 'root';
 $password = '';
 
