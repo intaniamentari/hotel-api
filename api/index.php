@@ -108,21 +108,27 @@ if (count($request) > 0 && $request[0] == 'rooms') {
             }
             break;
 
-        case 'PUT':
-            // PUT /rooms/{id} -> Memperbarui kamar
-            $input = json_decode(file_get_contents("php://input"), true);
-        
-            // Mendapatkan ID kamar dari URL
-            $room_id = (int) $request[1]; // Asumsikan ID kamar ada di $request[1]
-        
-            // Validasi input
-            $validation_error = ValidationRoom($input, true, $room_id);
-        
-            if ($validation_error) {
-                return responseError(400, $validation_error);
-            }
-        
+        case 'PUT':        
             try {
+                // PUT /rooms/{id} -> Memperbarui kamar
+                $input = json_decode(file_get_contents("php://input"), true);
+                // Mendapatkan ID kamar dari URL
+                $room_id = (int) $request[1]; // Asumsikan ID kamar ada di $request[1]
+
+                $stmt = $pdo->prepare("SELECT * FROM rooms WHERE id = :id AND deleted_at IS NULL");
+                $stmt->execute(['id' => $room_id]);
+
+                if($stmt->rowCount() > 0){
+                    // Validasi input
+                    $validation_error = ValidationRoom($input, true, $room_id);
+                
+                    if ($validation_error) {
+                        return responseError(400, $validation_error);
+                    }
+                } else {
+                    return responseError(404, "Room not found");
+                }
+
                 // Siapkan pernyataan untuk memperbarui data kamar
                 $stmt = $pdo->prepare("UPDATE rooms SET 
                     room_number = :room_number,
