@@ -10,83 +10,42 @@ include 'db.php';
 // Mendapatkan metode request (GET, POST, PUT, DELETE)
 $method = $_SERVER['REQUEST_METHOD'];
 
+// Fungsi untuk merespon data JSON
+function response($status, $message, $data = []) {
+    echo json_encode([
+        "status" => $status,
+        "message" => $message,
+        "data" => $data
+    ]);
+}
+
 // Mengambil data dari URL
-$request = explode("/", trim($_SERVER['PATH_INFO'], "/"));
+$request = isset($_SERVER['PATH_INFO']) ? explode("/", trim($_SERVER['PATH_INFO'], "/")) : [];
 
-// Endpoint API, misalnya: /users atau /users/1
-$resource = isset($request[0]) ? $request[0] : '';
-$id = isset($request[1]) ? (int)$request[1] : null;
+return $request[0];
 
-switch ($method) {
+// API Handler untuk berbagai metode
+switch($method) {
     case 'GET':
-        if ($resource === 'users') {
-            if ($id) {
-                // Ambil user berdasarkan ID
-                $stmt = $pdo->prepare("SELECT * FROM users WHERE id = ?");
-                $stmt->execute([$id]);
-                $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-                if ($user) {
-                    echo json_encode(['status' => 'success', 'data' => $user]);
-                } else {
-                    echo json_encode(['status' => 'error', 'message' => 'User not found']);
-                }
-            } else {
-                // Ambil semua users
-                $stmt = $pdo->query("SELECT * FROM users");
-                $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
-                echo json_encode(['status' => 'success', 'data' => $users]);
-            }
-        } else {
-            echo json_encode(['status' => 'error', 'message' => 'Invalid endpoint']);
-        }
+        response(200, "GET request successful", ["name" => "John Doe", "age" => 28]);
         break;
-
+    
     case 'POST':
-        if ($resource === 'users') {
-            // Ambil data JSON yang dikirim
-            $data = json_decode(file_get_contents('php://input'), true);
-
-            if (isset($data['name']) && isset($data['email'])) {
-                // Insert data user ke database
-                $stmt = $pdo->prepare("INSERT INTO users (name, email) VALUES (?, ?)");
-                $stmt->execute([$data['name'], $data['email']]);
-                echo json_encode(['status' => 'success', 'message' => 'User created']);
-            } else {
-                echo json_encode(['status' => 'error', 'message' => 'Invalid input']);
-            }
-        }
+        $input = json_decode(file_get_contents("php://input"), true);
+        response(200, "POST request successful", ["received_data" => $input]);
         break;
 
     case 'PUT':
-        if ($resource === 'users' && $id) {
-            // Ambil data JSON yang dikirim
-            $data = json_decode(file_get_contents('php://input'), true);
-
-            if (isset($data['name']) && isset($data['email'])) {
-                // Update user berdasarkan ID
-                $stmt = $pdo->prepare("UPDATE users SET name = ?, email = ? WHERE id = ?");
-                $stmt->execute([$data['name'], $data['email'], $id]);
-                echo json_encode(['status' => 'success', 'message' => 'User updated']);
-            } else {
-                echo json_encode(['status' => 'error', 'message' => 'Invalid input']);
-            }
-        }
+        $input = json_decode(file_get_contents("php://input"), true);
+        response(200, "PUT request successful", ["updated_data" => $input]);
         break;
 
     case 'DELETE':
-        if ($resource === 'users' && $id) {
-            // Hapus user berdasarkan ID
-            $stmt = $pdo->prepare("DELETE FROM users WHERE id = ?");
-            $stmt->execute([$id]);
-            echo json_encode(['status' => 'success', 'message' => 'User deleted']);
-        } else {
-            echo json_encode(['status' => 'error', 'message' => 'Invalid endpoint']);
-        }
+        response(200, "DELETE request successful");
         break;
 
     default:
-        echo json_encode(['status' => 'error', 'message' => 'Method not allowed']);
+        response(405, "Method not allowed");
         break;
 }
 ?>
